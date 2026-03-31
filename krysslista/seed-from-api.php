@@ -97,9 +97,9 @@ while (true) {
     $body = json_encode([
         'output' => [
             'fieldSet' => 'Extended',
-            'skip' => $skip,
-            'take' => $PAGE_SIZE,
         ],
+        'skip' => $skip,
+        'take' => $PAGE_SIZE,
         'dataProvider' => [
             'ids' => [1],
         ],
