@@ -12,7 +12,7 @@ require __DIR__ . '/token-helpers.php';
 
 $DB_FILE = __DIR__ . '/fageldagbok.db';
 $SOS_API = 'https://api.artdatabanken.se/species-observation-system/v1/Observations/Search';
-$PAGE_SIZE = 1000;
+$PAGE_SIZE = 100;
 
 // ── 1. Get valid access token ──
 
