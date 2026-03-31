@@ -4,12 +4,20 @@ on:
   push:
     branches: [main]
     paths: [krysslista/**]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Remove files that should not be deployed
+        run: |
+          rm -f krysslista/config.php
+          rm -f krysslista/config.example.php
+          rm -f krysslista/fageldagbok.db
+          rm -f krysslista/seed-data.php
 
       - name: Deploy via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
@@ -20,4 +28,3 @@ jobs:
           local_path: ./krysslista/
           remote_path: ${{ secrets.FTP_PATH }}
           sftp_only: true
-          exclude: config.php,tokens.json,fageldagbok.db
