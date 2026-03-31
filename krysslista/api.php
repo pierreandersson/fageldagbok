@@ -315,13 +315,14 @@ function handleLive() {
         ],
     ]);
 
-    $ch = curl_init('https://sos-search.artdata.slu.se/api/v2/Observations/Search');
+    $ch = curl_init('https://api.artdatabanken.se/species-observation-system/v1/Observations/Search');
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $accessToken,
+            'Ocp-Apim-Subscription-Key: ' . ($config['subscription_key'] ?? ''),
         ],
         CURLOPT_POSTFIELDS => $body,
         CURLOPT_TIMEOUT => 30,

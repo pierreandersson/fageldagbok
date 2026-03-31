@@ -24,5 +24,8 @@ return [
 
     'scopes' => 'openid offline_access SOS.Observations.Protected pierrea.se email profile',
 
+    // SOS API subscription key from https://api-portal.artdatabanken.se/
+    'subscription_key' => '',
+
     'token_file' => __DIR__ . '/tokens.json',
 ];
