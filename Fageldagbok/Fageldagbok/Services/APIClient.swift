@@ -3,12 +3,7 @@ import Foundation
 actor APIClient {
     static let shared = APIClient()
 
-    #if DEBUG
-    // Use Mac's local IP so physical devices on same Wi-Fi can connect
-    private let baseURL = "http://192.168.1.225:8091/api.php"
-    #else
     private let baseURL = "https://pierrea.se/krysslista/api.php"
-    #endif
 
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()

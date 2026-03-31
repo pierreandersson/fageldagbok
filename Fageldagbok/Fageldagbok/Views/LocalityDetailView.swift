@@ -138,22 +138,10 @@ struct LocalityObservationsView: View {
     var body: some View {
         List {
             Section {
-                Text(localityName)
+                Text("\(localityObs.count) observationer")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Sök art", text: $searchText)
-                        .textFieldStyle(.plain)
-                    if !searchText.isEmpty {
-                        Button { searchText = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                    .listRowBackground(Color.clear)
             }
 
             ForEach(groupedByDate, id: \.date) { group in
@@ -188,8 +176,9 @@ struct LocalityObservationsView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("Observationer")
+        .navigationTitle(localityName)
         .navigationBarTitleDisplayMode(.inline)
+        // NOTE: .searchable removed — nested .searchable causes hang on back navigation
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -257,25 +246,6 @@ struct LocalitySpeciesView: View {
 
     var body: some View {
         List {
-            Section {
-                Text(localityName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Sök art", text: $searchText)
-                        .textFieldStyle(.plain)
-                    if !searchText.isEmpty {
-                        Button { searchText = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
             Section("\(filteredSpecies.count) arter") {
                 ForEach(filteredSpecies, id: \.taxonId) { species in
                     HStack {
@@ -304,7 +274,8 @@ struct LocalitySpeciesView: View {
                 }
             }
         }
-        .navigationTitle("Arter")
+        .navigationTitle(localityName)
         .navigationBarTitleDisplayMode(.inline)
+        // NOTE: .searchable removed — nested .searchable causes hang on back navigation
     }
 }

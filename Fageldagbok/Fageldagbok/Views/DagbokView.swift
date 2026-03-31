@@ -2,9 +2,10 @@ import SwiftUI
 
 struct DagbokView: View {
     @Bindable var viewModel: BirdViewModel
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             List {
                 // Summary cards
                 if let summary = viewModel.summary {
@@ -44,7 +45,6 @@ struct DagbokView: View {
                 // Observations grouped by date
                 ForEach(viewModel.groupedByDate, id: \.date) { group in
                     Section {
-                        // Group by locality within date
                         let byLocality = Dictionary(grouping: group.observations) { $0.locality ?? "Okänd plats" }
                         let sortedLocalities = byLocality.keys.sorted()
 
@@ -96,6 +96,12 @@ struct DagbokView: View {
                     allObservations: observations
                 )
             }
+            .navigationDestination(for: SpeciesDestination.self) { [observations = viewModel.observations] dest in
+                SpeciesObservationsView(
+                    species: dest.species,
+                    observations: observations.filter { $0.taxonId == dest.species.taxonId }
+                )
+            }
             .navigationDestination(for: LocalityObsDestination.self) { [observations = viewModel.observations] dest in
                 LocalityObservationsView(
                     localityName: dest.localityName,
@@ -109,6 +115,11 @@ struct DagbokView: View {
                 )
             }
             .searchable(text: $viewModel.searchText, prompt: "Sök art eller lokal")
+            .searchSuggestions {
+                if !viewModel.searchText.isEmpty {
+                    SearchResultsView(viewModel: viewModel, navigationPath: $navigationPath)
+                }
+            }
             .refreshable { await viewModel.refresh() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -138,7 +149,6 @@ struct DagbokView: View {
 
     @ViewBuilder
     private var filterMenu: some View {
-        // Year filter
         Menu("År") {
             Button("Alla år") {
                 viewModel.selectedYear = nil
@@ -152,7 +162,6 @@ struct DagbokView: View {
             }
         }
 
-        // County filter
         if !viewModel.availableCounties.isEmpty {
             Menu("Län") {
                 Button("Alla län") {
@@ -168,7 +177,6 @@ struct DagbokView: View {
             }
         }
 
-        // Area presets
         if !viewModel.areas.isEmpty {
             Divider()
             Menu("Område") {
@@ -200,5 +208,88 @@ struct DagbokView: View {
         .background(Color("AccentGreen").opacity(0.15))
         .foregroundStyle(Color("AccentGreen"))
         .clipShape(Capsule())
+    }
+}
+
+// MARK: - Search results overlay
+
+struct SearchResultsView: View {
+    let viewModel: BirdViewModel
+    @Binding var navigationPath: NavigationPath
+
+    var body: some View {
+        ForEach(viewModel.matchedSpecies) { species in
+            Button {
+                viewModel.searchText = ""
+                navigationPath.append(SpeciesDestination(species: species))
+            } label: {
+                HStack {
+                    Image(systemName: "bird")
+                        .foregroundStyle(Color("AccentGreen"))
+                        .frame(width: 24)
+                    VStack(alignment: .leading) {
+                        Text(species.displayName)
+                            .foregroundStyle(.primary)
+                        Text("\(species.scientificName ?? "") · \(species.observationCount) obs")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+
+        ForEach(viewModel.matchedLocalities) { locality in
+            Button {
+                viewModel.searchText = ""
+                navigationPath.append(locality.locality as String)
+            } label: {
+                HStack {
+                    Image(systemName: "mappin.and.ellipse")
+                        .foregroundStyle(.red)
+                        .frame(width: 24)
+                    VStack(alignment: .leading) {
+                        Text(locality.locality)
+                            .foregroundStyle(.primary)
+                        Text("\(locality.observationCount) obs · \(locality.speciesCount) arter")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+
+        if !viewModel.searchText.isEmpty && !viewModel.hasSearchResults {
+            Text("Inga träffar")
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Species observations view (from search)
+
+struct SpeciesDestination: Hashable {
+    let species: Species
+}
+
+struct SpeciesObservationsView: View {
+    let species: Species
+    let observations: [BirdObservation]
+
+    var body: some View {
+        List {
+            Section {
+                Text("\(observations.count) observationer")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .listRowBackground(Color.clear)
+            }
+
+            ForEach(observations) { observation in
+                NavigationLink(value: observation) {
+                    ObservationRow(observation: observation)
+                }
+            }
+        }
+        .navigationTitle(species.displayName)
     }
 }

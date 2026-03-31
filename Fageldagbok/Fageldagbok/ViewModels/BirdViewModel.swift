@@ -109,18 +109,38 @@ class BirdViewModel {
 
     // MARK: - Filtered data
 
-    var filteredObservations: [BirdObservation] {
-        guard !searchText.isEmpty else { return observations }
+    // MARK: - Search results (matched entities)
+
+    var matchedSpecies: [Species] {
+        guard !searchText.isEmpty else { return [] }
         let query = searchText.lowercased()
-        return observations.filter {
+        return species.filter {
             ($0.vernacularName?.lowercased().contains(query) ?? false) ||
-            ($0.scientificName?.lowercased().contains(query) ?? false) ||
-            ($0.locality?.lowercased().contains(query) ?? false)
+            ($0.scientificName?.lowercased().contains(query) ?? false)
         }
     }
 
+    var matchedLocalities: [Locality] {
+        guard !searchText.isEmpty else { return [] }
+        let query = searchText.lowercased()
+        return localities.filter {
+            $0.locality.lowercased().contains(query)
+        }
+    }
+
+    var hasSearchResults: Bool {
+        !matchedSpecies.isEmpty || !matchedLocalities.isEmpty
+    }
+
+    func observations(forTaxonId taxonId: Int) -> [BirdObservation] {
+        observations.filter { $0.taxonId == taxonId }
+            .sorted { $0.eventStartDate > $1.eventStartDate }
+    }
+
+    // MARK: - Grouped observations (no search filtering — search uses overlay)
+
     var groupedByDate: [(date: String, displayDate: String, observations: [BirdObservation])] {
-        let grouped = Dictionary(grouping: filteredObservations) { $0.eventStartDate }
+        let grouped = Dictionary(grouping: observations) { $0.eventStartDate }
         return grouped.keys.sorted(by: >).map { date in
             let obs = grouped[date]!.sorted { a, b in
                 (a.locality ?? "") < (b.locality ?? "")
