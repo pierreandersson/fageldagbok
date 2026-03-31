@@ -129,12 +129,17 @@ $totalFromApi = $data['totalCount'] ?? count($records);
 
 echo "  API returned " . count($records) . " records (totalCount: $totalFromApi)\n";
 
-if (count($records) < $totalFromApi) {
-    echo "  WARNING: Got fewer records than totalCount. API may cap results.\n";
+$gotAll = count($records) >= $totalFromApi;
+
+if (!$gotAll) {
+    echo "  WARNING: Got fewer records than totalCount. Will merge with existing data (not replace).\n";
 }
 
-// Clear old data and insert fresh
-$db->exec("DELETE FROM observations");
+if ($gotAll) {
+    // We got everything — clean slate
+    $db->exec("DELETE FROM observations");
+}
+
 $db->exec('BEGIN');
 
 $totalInserted = 0;
