@@ -1,0 +1,15 @@
+# OAuth secrets
+krysslista/config.php
+krysslista/tokens.json
+
+# SQLite databases (generated)
+*.db
+*.db-shm
+*.db-wal
+
+# macOS
+.DS_Store
+
+# Xcode
+Fageldagbok/Fageldagbok.xcodeproj/xcuserdata/
+Fageldagbok/Fageldagbok.xcodeproj/project.xcworkspace/xcuserdata/

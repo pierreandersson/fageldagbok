@@ -1,0 +1,23 @@
+name: Deploy to pierrea.se
+
+on:
+  push:
+    branches: [main]
+    paths: [krysslista/**]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          local_path: ./krysslista/
+          remote_path: ${{ secrets.FTP_PATH }}
+          sftp_only: true
+          exclude: config.php,tokens.json,fageldagbok.db

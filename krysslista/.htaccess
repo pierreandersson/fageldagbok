@@ -1,0 +1,14 @@
+# Block sensitive files
+<FilesMatch "\.(txt|json|db|db-shm|db-wal)$">
+    Require all denied
+</FilesMatch>
+
+# Block config and helper PHP (not directly accessible)
+<FilesMatch "^(config|config\.example|token-helpers)\.php$">
+    Require all denied
+</FilesMatch>
+
+# Allow public-facing PHP scripts
+<FilesMatch "^(api|auth-start|auth-callback|logout)\.php$">
+    Require all granted
+</FilesMatch>
