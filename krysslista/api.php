@@ -306,13 +306,15 @@ function handleLive() {
         'output' => [
             'fieldSet' => 'Extended',
         ],
-        'searchFilter' => [
-            'date' => [
-                'startDate' => $today,
-                'endDate' => $today,
-            ],
-            'reportedByMe' => true,
+        'date' => [
+            'startDate' => $today,
+            'endDate' => $today,
+            'dateFilterType' => 'BetweenStartDateAndEndDate',
         ],
+        'dataProvider' => [
+            'ids' => [1],
+        ],
+        'reportedByMe' => true,
     ]);
 
     $ch = curl_init('https://api.artdatabanken.se/species-observation-system/v1/Observations/Search');
