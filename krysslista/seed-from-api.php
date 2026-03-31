@@ -12,7 +12,9 @@ require __DIR__ . '/token-helpers.php';
 
 $DB_FILE = __DIR__ . '/fageldagbok.db';
 $SOS_API = 'https://api.artdatabanken.se/species-observation-system/v1/Observations/Search';
-$MAX_RESULTS = 2000; // Fetch all in one request (Pierre has <500 obs)
+// SOS API FAQ: max 1000 per page, skip+take <= 10000
+// skip and take are URL query parameters, not body params
+$PAGE_SIZE = 500;
 
 // ── 1. Get valid access token ──
 
@@ -92,58 +94,91 @@ $body = json_encode([
     'output' => [
         'fieldSet' => 'Extended',
     ],
-    'take' => $MAX_RESULTS,
     'dataProvider' => [
         'ids' => [1],
     ],
     'reportedByMe' => true,
 ]);
 
-$ch = curl_init($SOS_API);
-curl_setopt_array($ch, [
-    CURLOPT_POST => true,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . $accessToken,
-        'Ocp-Apim-Subscription-Key: ' . ($config['subscription_key'] ?? ''),
-    ],
-    CURLOPT_POSTFIELDS => $body,
-    CURLOPT_TIMEOUT => 120,
-]);
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlError = curl_error($ch);
-curl_close($ch);
+$headers = [
+    'Content-Type: application/json',
+    'Authorization: Bearer ' . $accessToken,
+    'Ocp-Apim-Subscription-Key: ' . ($config['subscription_key'] ?? ''),
+];
 
-if ($httpCode !== 200) {
-    echo "ERROR: SOS API returned HTTP $httpCode\n";
-    echo $curlError ?: $response;
-    echo "\n";
+// Fetch all pages
+$allRecords = [];
+$totalFromApi = null;
+$skip = 0;
+$maxPages = 20; // Safety limit: 20 pages * 500 = 10000 max
+
+for ($page = 1; $page <= $maxPages; $page++) {
+    $url = $SOS_API . '?skip=' . $skip . '&take=' . $PAGE_SIZE;
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_POSTFIELDS => $body,
+        CURLOPT_TIMEOUT => 60,
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode !== 200) {
+        echo "ERROR: SOS API returned HTTP $httpCode on page $page\n";
+        echo $curlError ?: $response;
+        echo "\n";
+        exit(1);
+    }
+
+    $data = json_decode($response, true);
+    $records = $data['records'] ?? [];
+    $totalFromApi = $data['totalCount'] ?? $totalFromApi;
+
+    echo "  Page $page: got " . count($records) . " records (skip=$skip, total=$totalFromApi)\n";
+
+    if (empty($records)) {
+        break;
+    }
+
+    $allRecords = array_merge($allRecords, $records);
+
+    // Stop if we got everything
+    if (count($allRecords) >= $totalFromApi) {
+        break;
+    }
+
+    // Stop if page was not full (last page)
+    if (count($records) < $PAGE_SIZE) {
+        break;
+    }
+
+    $skip += $PAGE_SIZE;
+}
+
+echo "  Total fetched: " . count($allRecords) . " of $totalFromApi\n";
+
+if (count($allRecords) === 0) {
+    echo "ERROR: No records fetched. Aborting.\n";
     exit(1);
 }
 
-$data = json_decode($response, true);
-$records = $data['records'] ?? [];
-$totalFromApi = $data['totalCount'] ?? count($records);
-
-echo "  API returned " . count($records) . " records (totalCount: $totalFromApi)\n";
-
-$gotAll = count($records) >= $totalFromApi;
-
-if (!$gotAll) {
-    echo "  WARNING: Got fewer records than totalCount. Will merge with existing data (not replace).\n";
-}
-
-if ($gotAll) {
-    // We got everything — clean slate
+// Only clear DB if we got all records
+if (count($allRecords) >= $totalFromApi) {
     $db->exec("DELETE FROM observations");
+    echo "  Cleared old data (got all records).\n";
+} else {
+    echo "  WARNING: Got fewer than totalCount. Merging with existing data.\n";
 }
 
 $db->exec('BEGIN');
 
 $totalInserted = 0;
-foreach ($records as $rec) {
+foreach ($allRecords as $rec) {
     $row = mapRecord($rec);
     $stmt->reset();
     foreach ($row as $key => $value) {
