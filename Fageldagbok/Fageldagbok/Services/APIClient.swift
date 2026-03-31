@@ -64,6 +64,12 @@ actor APIClient {
         try await get("areas")
     }
 
+    func fetchLive(date: String? = nil) async throws -> LiveResponse {
+        var params: [String] = []
+        if let date { params.append("date=\(date)") }
+        return try await get("live", extraParams: params)
+    }
+
     // MARK: - Private
 
     private func get<T: Decodable>(_ endpoint: String, extraParams: [String] = []) async throws -> T {

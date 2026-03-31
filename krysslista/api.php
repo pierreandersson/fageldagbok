@@ -344,11 +344,53 @@ function handleLive() {
     }
 
     $data = json_decode($response, true);
+    $records = $data['records'] ?? [];
+
+    // Transform SOS API nested format to flat format matching ?q=observations
+    $observations = array_map('mapSosRecord', $records);
+
     jsonOut([
         'date' => $date,
-        'total' => $data['totalCount'] ?? count($data['records'] ?? []),
-        'observations' => $data['records'] ?? [],
+        'total' => count($observations),
+        'observations' => $observations,
     ]);
+}
+
+/**
+ * Transform a SOS API record (nested) to flat format matching the DB schema.
+ * Same mapping as seed-from-api.php's mapRecord().
+ */
+function mapSosRecord(array $rec): array {
+    return [
+        'occurrence_id'         => $rec['occurrence']['occurrenceId'] ?? null,
+        'taxon_id'              => $rec['taxon']['id'] ?? null,
+        'scientific_name'       => $rec['taxon']['scientificName'] ?? null,
+        'vernacular_name'       => $rec['taxon']['vernacularName'] ?? null,
+        'individual_count'      => intval($rec['occurrence']['organismQuantityInt'] ?? $rec['occurrence']['individualCount'] ?? 0) ?: null,
+        'event_start_date'      => $rec['event']['plainStartDate'] ?? null,
+        'event_end_date'        => $rec['event']['plainEndDate'] ?? null,
+        'start_time'            => $rec['event']['plainStartTime'] ?? null,
+        'latitude'              => $rec['location']['decimalLatitude'] ?? null,
+        'longitude'             => $rec['location']['decimalLongitude'] ?? null,
+        'locality'              => $rec['location']['locality'] ?? null,
+        'municipality'          => $rec['location']['municipality']['name'] ?? null,
+        'parish'                => $rec['location']['parish']['name'] ?? null,
+        'county'                => $rec['location']['county']['name'] ?? null,
+        'recorded_by'           => $rec['occurrence']['recordedBy'] ?? null,
+        'reported_by'           => $rec['occurrence']['reportedBy'] ?? null,
+        'remarks'               => $rec['occurrence']['occurrenceRemarks'] ?? null,
+        'activity'              => ($rec['occurrence']['activity']['value'] ?? null) ?: null,
+        'bird_nest_activity_id' => $rec['occurrence']['birdNestActivityId'] ?? null,
+        'sex'                   => ($rec['occurrence']['sex']['value'] ?? null) ?: null,
+        'life_stage'            => ($rec['occurrence']['lifeStage']['value'] ?? null) ?: null,
+        'family'                => $rec['taxon']['family'] ?? null,
+        'taxonomic_order'       => $rec['taxon']['order'] ?? null,
+        'is_redlisted'          => ($rec['taxon']['attributes']['isRedlisted'] ?? false) ? 1 : 0,
+        'redlist_category'      => $rec['taxon']['attributes']['redlistCategory'] ?? null,
+        'verification_status'   => $rec['identification']['verificationStatus']['value'] ?? null,
+        'url'                   => $rec['occurrence']['url'] ?? null,
+        'dataset_name'          => $rec['datasetName'] ?? null,
+    ];
 }
 
 function handleAuthStatus() {

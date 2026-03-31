@@ -83,3 +83,9 @@ struct ObservationsResponse: Codable {
     let offset: Int
     let observations: [BirdObservation]
 }
+
+struct LiveResponse: Codable {
+    let date: String
+    let total: Int
+    let observations: [BirdObservation]
+}

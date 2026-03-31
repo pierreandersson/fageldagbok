@@ -72,6 +72,9 @@ class BirdViewModel {
             stats = st
             areas = ar.areas
 
+            // Merge today's live observations from SOS API
+            await mergeLiveObservations()
+
             // Cache everything
             await store.saveSummary(s)
             await store.saveObservations(o.observations)
@@ -84,6 +87,24 @@ class BirdViewModel {
         }
 
         isLoading = false
+    }
+
+    // MARK: - Live observations
+
+    private func mergeLiveObservations() async {
+        do {
+            let live = try await api.fetchLive()
+            guard !live.observations.isEmpty else { return }
+
+            let existingIds = Set(observations.map(\.occurrenceId))
+            let newObs = live.observations.filter { !existingIds.contains($0.occurrenceId) }
+            if !newObs.isEmpty {
+                observations.append(contentsOf: newObs)
+                observations.sort { $0.eventStartDate > $1.eventStartDate }
+            }
+        } catch {
+            // Live data is optional — don't show error if it fails
+        }
     }
 
     // MARK: - Filtered data
