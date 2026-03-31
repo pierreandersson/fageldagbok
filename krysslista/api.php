@@ -300,15 +300,15 @@ function handleLive() {
         ]);
     }
 
-    // Fetch today's observations from SOS API (reported by the authenticated user)
-    $today = date('Y-m-d');
+    // Fetch observations from SOS API (reported by the authenticated user)
+    $date = $_GET['date'] ?? date('Y-m-d');
     $body = json_encode([
         'output' => [
             'fieldSet' => 'Extended',
         ],
         'date' => [
-            'startDate' => $today,
-            'endDate' => $today,
+            'startDate' => $date,
+            'endDate' => $date,
             'dateFilterType' => 'BetweenStartDateAndEndDate',
         ],
         'dataProvider' => [
@@ -345,7 +345,7 @@ function handleLive() {
 
     $data = json_decode($response, true);
     jsonOut([
-        'date' => $today,
+        'date' => $date,
         'total' => $data['totalCount'] ?? count($data['records'] ?? []),
         'observations' => $data['records'] ?? [],
     ]);
