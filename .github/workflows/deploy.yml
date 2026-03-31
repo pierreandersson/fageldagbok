@@ -23,4 +23,5 @@ jobs:
           put krysslista/auth-callback.php
           put krysslista/logout.php
           put krysslista/token-helpers.php
+          put krysslista/seed-from-api.php
           EOF
