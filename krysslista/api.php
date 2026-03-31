@@ -36,21 +36,6 @@ const AREA_PRESETS = [
         'lat_min' => 56.19, 'lat_max' => 57.37,
         'lng_min' => 16.30, 'lng_max' => 17.16,
     ],
-    'ottenby' => [
-        'name' => 'Ottenby',
-        'lat_min' => 56.19, 'lat_max' => 56.24,
-        'lng_min' => 16.37, 'lng_max' => 16.42,
-    ],
-    'hornborgasjon' => [
-        'name' => 'Hornborgasjön',
-        'lat_min' => 58.28, 'lat_max' => 58.38,
-        'lng_min' => 13.52, 'lng_max' => 13.68,
-    ],
-    'falsterbo' => [
-        'name' => 'Falsterbo',
-        'lat_min' => 55.38, 'lat_max' => 55.42,
-        'lng_min' => 12.81, 'lng_max' => 12.90,
-    ],
 ];
 
 $DB_FILE = __DIR__ . '/fageldagbok.db';
@@ -279,7 +264,14 @@ function handleStats($db) {
 function handleAreas() {
     $areas = [];
     foreach (AREA_PRESETS as $key => $def) {
-        $areas[] = ['id' => $key, 'name' => $def['name']];
+        $areas[] = [
+            'id' => $key,
+            'name' => $def['name'],
+            'lat_min' => $def['lat_min'],
+            'lat_max' => $def['lat_max'],
+            'lng_min' => $def['lng_min'],
+            'lng_max' => $def['lng_max'],
+        ];
     }
     jsonOut(['areas' => $areas]);
 }

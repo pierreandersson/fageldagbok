@@ -25,17 +25,17 @@ struct DagbokView: View {
                     Section {
                         HStack {
                             if let year = viewModel.selectedYear {
-                                filterChip("\(year)") { viewModel.selectedYear = nil; Task { await viewModel.applyFilters() } }
+                                filterChip("\(year)") { viewModel.selectedYear = nil; viewModel.applyFilters() }
                             }
                             if let county = viewModel.selectedCounty {
-                                filterChip(county) { viewModel.selectedCounty = nil; Task { await viewModel.applyFilters() } }
+                                filterChip(county) { viewModel.selectedCounty = nil; viewModel.applyFilters() }
                             }
                             if let areaId = viewModel.selectedArea,
                                let areaName = viewModel.areas.first(where: { $0.areaId == areaId })?.name {
-                                filterChip(areaName) { viewModel.selectedArea = nil; Task { await viewModel.applyFilters() } }
+                                filterChip(areaName) { viewModel.selectedArea = nil; viewModel.applyFilters() }
                             }
                             Spacer()
-                            Button("Rensa") { Task { await viewModel.clearFilters() } }
+                            Button("Rensa") { viewModel.clearFilters() }
                                 .font(.caption)
                         }
                         .listRowBackground(Color.clear)
@@ -152,12 +152,12 @@ struct DagbokView: View {
         Menu("År") {
             Button("Alla år") {
                 viewModel.selectedYear = nil
-                Task { await viewModel.applyFilters() }
+                viewModel.applyFilters()
             }
             ForEach(viewModel.availableYears, id: \.self) { year in
                 Button(String(year)) {
                     viewModel.selectedYear = year
-                    Task { await viewModel.applyFilters() }
+                    viewModel.applyFilters()
                 }
             }
         }
@@ -166,12 +166,12 @@ struct DagbokView: View {
             Menu("Län") {
                 Button("Alla län") {
                     viewModel.selectedCounty = nil
-                    Task { await viewModel.applyFilters() }
+                    viewModel.applyFilters()
                 }
                 ForEach(viewModel.availableCounties, id: \.self) { county in
                     Button(county) {
                         viewModel.selectedCounty = county
-                        Task { await viewModel.applyFilters() }
+                        viewModel.applyFilters()
                     }
                 }
             }
@@ -182,12 +182,12 @@ struct DagbokView: View {
             Menu("Område") {
                 Button("Alla") {
                     viewModel.selectedArea = nil
-                    Task { await viewModel.applyFilters() }
+                    viewModel.applyFilters()
                 }
                 ForEach(viewModel.areas) { area in
                     Button(area.name) {
                         viewModel.selectedArea = area.areaId
-                        Task { await viewModel.applyFilters() }
+                        viewModel.applyFilters()
                     }
                 }
             }

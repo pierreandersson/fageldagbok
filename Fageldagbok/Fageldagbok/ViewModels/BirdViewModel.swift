@@ -18,7 +18,10 @@ class BirdViewModel {
     // Filters
     var selectedYear: Int?
     var selectedCounty: String?
-    var selectedArea: String? // "takern" or nil
+    var selectedArea: String?
+
+    // All observations (unfiltered, from server)
+    private var allObservations: [BirdObservation] = []
 
     private let api = APIClient.shared
     private let store = LocalStore.shared
@@ -27,7 +30,8 @@ class BirdViewModel {
         Task {
             // Show cached data immediately
             summary = await store.loadSummary()
-            observations = await store.loadObservations()
+            allObservations = await store.loadObservations()
+            applyLocalFilters()
             species = await store.loadSpecies()
             lifelist = await store.loadLifelist()
             localities = await store.loadLocalities()
@@ -47,12 +51,7 @@ class BirdViewModel {
 
         do {
             async let summaryTask = api.fetchSummary()
-            async let observationsTask = api.fetchObservations(
-                limit: 500,
-                year: selectedYear,
-                county: selectedCounty,
-                area: selectedArea
-            )
+            async let observationsTask = api.fetchObservations(limit: 500)
             async let speciesTask = api.fetchSpecies()
             async let lifelistTask = api.fetchLifelist()
             async let localitiesTask = api.fetchLocalities()
@@ -65,7 +64,7 @@ class BirdViewModel {
             )
 
             summary = s
-            observations = o.observations
+            allObservations = o.observations
             species = sp.species
             lifelist = ll.lifelist
             localities = lo.localities
@@ -74,10 +73,11 @@ class BirdViewModel {
 
             // Merge today's live observations from SOS API
             await mergeLiveObservations()
+            applyLocalFilters()
 
             // Cache everything
             await store.saveSummary(s)
-            await store.saveObservations(o.observations)
+            await store.saveObservations(allObservations)
             await store.saveSpecies(sp.species)
             await store.saveLifelist(ll.lifelist)
             await store.saveLocalities(lo.localities)
@@ -96,11 +96,11 @@ class BirdViewModel {
             let live = try await api.fetchLive()
             guard !live.observations.isEmpty else { return }
 
-            let existingIds = Set(observations.map(\.occurrenceId))
+            let existingIds = Set(allObservations.map(\.occurrenceId))
             let newObs = live.observations.filter { !existingIds.contains($0.occurrenceId) }
             if !newObs.isEmpty {
-                observations.append(contentsOf: newObs)
-                observations.sort { $0.eventStartDate > $1.eventStartDate }
+                allObservations.append(contentsOf: newObs)
+                allObservations.sort { $0.eventStartDate > $1.eventStartDate }
             }
         } catch {
             // Live data is optional — don't show error if it fails
@@ -133,7 +133,7 @@ class BirdViewModel {
     }
 
     func observations(forTaxonId taxonId: Int) -> [BirdObservation] {
-        observations.filter { $0.taxonId == taxonId }
+        allObservations.filter { $0.taxonId == taxonId }
             .sorted { $0.eventStartDate > $1.eventStartDate }
     }
 
@@ -176,32 +176,40 @@ class BirdViewModel {
     }
 
     var availableCounties: [String] {
-        let counties = Set(observations.compactMap(\.county))
+        let counties = Set(allObservations.compactMap(\.county))
         return counties.sorted()
     }
 
     // MARK: - Apply filters
 
-    func applyFilters() async {
-        do {
-            let response = try await api.fetchObservations(
-                limit: 500,
-                year: selectedYear,
-                county: selectedCounty,
-                area: selectedArea
-            )
-            observations = response.observations
-            await store.saveObservations(response.observations)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    func applyFilters() {
+        applyLocalFilters()
     }
 
-    func clearFilters() async {
+    func clearFilters() {
         selectedYear = nil
         selectedCounty = nil
         selectedArea = nil
-        await applyFilters()
+        applyLocalFilters()
+    }
+
+    private func applyLocalFilters() {
+        var result = allObservations
+
+        if let year = selectedYear {
+            result = result.filter { $0.eventStartDate.hasPrefix(String(year)) }
+        }
+        if let county = selectedCounty {
+            result = result.filter { $0.county == county }
+        }
+        if let areaId = selectedArea, let area = areas.first(where: { $0.areaId == areaId }) {
+            result = result.filter {
+                guard let lat = $0.latitude, let lng = $0.longitude else { return false }
+                return area.contains(latitude: lat, longitude: lng)
+            }
+        }
+
+        observations = result
     }
 
     var hasActiveFilters: Bool {

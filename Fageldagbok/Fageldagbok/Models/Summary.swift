@@ -20,10 +20,24 @@ struct AreaPreset: Codable, Identifiable, Hashable {
     var id: String { areaId }
     let areaId: String
     let name: String
+    let latMin: Double?
+    let latMax: Double?
+    let lngMin: Double?
+    let lngMax: Double?
 
     enum CodingKeys: String, CodingKey {
         case areaId = "id"
         case name
+        case latMin = "lat_min"
+        case latMax = "lat_max"
+        case lngMin = "lng_min"
+        case lngMax = "lng_max"
+    }
+
+    func contains(latitude: Double, longitude: Double) -> Bool {
+        guard let latMin, let latMax, let lngMin, let lngMax else { return false }
+        return latitude >= latMin && latitude <= latMax &&
+               longitude >= lngMin && longitude <= lngMax
     }
 }
 
