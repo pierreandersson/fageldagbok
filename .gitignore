@@ -1,6 +1,7 @@
-# OAuth secrets
+# Secrets
 krysslista/config.php
 krysslista/tokens.json
+sos_api_key.txt
 
 # SQLite databases (generated)
 *.db
