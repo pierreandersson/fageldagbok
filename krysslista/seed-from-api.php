@@ -12,7 +12,7 @@ require __DIR__ . '/token-helpers.php';
 
 $DB_FILE = __DIR__ . '/fageldagbok.db';
 $SOS_API = 'https://api.artdatabanken.se/species-observation-system/v1/Observations/Search';
-$PAGE_SIZE = 100;
+$MAX_RESULTS = 2000; // Fetch all in one request (Pierre has <500 obs)
 
 // ── 1. Get valid access token ──
 
@@ -86,82 +86,66 @@ $stmt = $db->prepare("INSERT OR REPLACE INTO observations (
 
 // ── 4. Fetch and insert in pages ──
 
-$db->exec('BEGIN');
-$skip = 0;
-$totalInserted = 0;
-$totalFromApi = null;
-
 echo "Fetching observations from SOS API...\n";
 
-while (true) {
-    $body = json_encode([
-        'output' => [
-            'fieldSet' => 'Extended',
-        ],
-        'skip' => $skip,
-        'take' => $PAGE_SIZE,
-        'dataProvider' => [
-            'ids' => [1],
-        ],
-        'reportedByMe' => true,
-    ]);
+$body = json_encode([
+    'output' => [
+        'fieldSet' => 'Extended',
+    ],
+    'take' => $MAX_RESULTS,
+    'dataProvider' => [
+        'ids' => [1],
+    ],
+    'reportedByMe' => true,
+]);
 
-    $ch = curl_init($SOS_API);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $accessToken,
-            'Ocp-Apim-Subscription-Key: ' . ($config['subscription_key'] ?? ''),
-        ],
-        CURLOPT_POSTFIELDS => $body,
-        CURLOPT_TIMEOUT => 60,
-    ]);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
+$ch = curl_init($SOS_API);
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $accessToken,
+        'Ocp-Apim-Subscription-Key: ' . ($config['subscription_key'] ?? ''),
+    ],
+    CURLOPT_POSTFIELDS => $body,
+    CURLOPT_TIMEOUT => 120,
+]);
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
+curl_close($ch);
 
-    if ($httpCode !== 200) {
-        echo "ERROR: SOS API returned HTTP $httpCode\n";
-        echo $curlError ?: $response;
-        echo "\n";
-        $db->exec('ROLLBACK');
-        exit(1);
+if ($httpCode !== 200) {
+    echo "ERROR: SOS API returned HTTP $httpCode\n";
+    echo $curlError ?: $response;
+    echo "\n";
+    exit(1);
+}
+
+$data = json_decode($response, true);
+$records = $data['records'] ?? [];
+$totalFromApi = $data['totalCount'] ?? count($records);
+
+echo "  API returned " . count($records) . " records (totalCount: $totalFromApi)\n";
+
+if (count($records) < $totalFromApi) {
+    echo "  WARNING: Got fewer records than totalCount. API may cap results.\n";
+}
+
+// Clear old data and insert fresh
+$db->exec("DELETE FROM observations");
+$db->exec('BEGIN');
+
+$totalInserted = 0;
+foreach ($records as $rec) {
+    $row = mapRecord($rec);
+    $stmt->reset();
+    foreach ($row as $key => $value) {
+        $stmt->bindValue(":$key", $value);
     }
-
-    $data = json_decode($response, true);
-    $records = $data['records'] ?? [];
-    $totalFromApi = $data['totalCount'] ?? $totalFromApi;
-
-    if (empty($records)) {
-        break;
-    }
-
-    foreach ($records as $rec) {
-        $row = mapRecord($rec);
-        $stmt->reset();
-        foreach ($row as $key => $value) {
-            $stmt->bindValue(":$key", $value);
-        }
-        $stmt->execute();
-        $totalInserted++;
-    }
-
-    $page = intval($skip / $PAGE_SIZE) + 1;
-    echo "  Page $page: fetched " . count($records) . " records (total: $totalInserted / $totalFromApi)\n";
-
-    if (count($records) < $PAGE_SIZE) {
-        break;
-    }
-
-    // Safety: stop if we've fetched more than the API's total count
-    if ($totalFromApi !== null && $totalInserted >= $totalFromApi) {
-        break;
-    }
-
-    $skip += $PAGE_SIZE;
+    $stmt->execute();
+    $totalInserted++;
 }
 
 $db->exec('COMMIT');
