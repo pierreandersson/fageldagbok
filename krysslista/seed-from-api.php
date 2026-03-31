@@ -156,6 +156,11 @@ while (true) {
         break;
     }
 
+    // Safety: stop if we've fetched more than the API's total count
+    if ($totalFromApi !== null && $totalInserted >= $totalFromApi) {
+        break;
+    }
+
     $skip += $PAGE_SIZE;
 }
 
