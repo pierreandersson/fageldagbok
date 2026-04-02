@@ -60,7 +60,7 @@ actor APIClient {
     }
 
     func triggerSync() async throws -> SyncResponse {
-        try await get("sync", extraParams: ["key=SYNC_KEY_REDACTED"])
+        try await get("sync", extraParams: ["key=\(Secrets.syncKey)"])
     }
 
     func fetchLive(date: String? = nil) async throws -> LiveResponse {

@@ -2,6 +2,7 @@
 krysslista/config.php
 krysslista/tokens.json
 sos_api_key.txt
+Fageldagbok/Fageldagbok/Services/Secrets.swift
 
 # SQLite databases (generated)
 *.db
