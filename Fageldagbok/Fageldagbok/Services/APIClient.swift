@@ -59,6 +59,10 @@ actor APIClient {
         try await get("areas")
     }
 
+    func triggerSync() async throws -> SyncResponse {
+        try await get("sync", extraParams: ["key=SYNC_KEY_REDACTED"])
+    }
+
     func fetchLive(date: String? = nil) async throws -> LiveResponse {
         var params: [String] = []
         if let date { params.append("date=\(date)") }

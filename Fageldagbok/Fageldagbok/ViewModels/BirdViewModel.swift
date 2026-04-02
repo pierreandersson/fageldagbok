@@ -49,6 +49,9 @@ class BirdViewModel {
         isLoading = true
         errorMessage = nil
 
+        // Sync database with SOS API first (non-blocking on failure)
+        _ = try? await api.triggerSync()
+
         do {
             async let summaryTask = api.fetchSummary()
             async let observationsTask = api.fetchObservations(limit: 500)

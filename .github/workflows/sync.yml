@@ -1,0 +1,25 @@
+name: Sync observations from SOS API
+
+on:
+  schedule:
+    # Every morning at 06:00 and evening at 21:00 (UTC+2, so 04:00 and 19:00 UTC)
+    - cron: '3 4 * * *'
+    - cron: '3 19 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger sync endpoint
+        run: |
+          response=$(curl -s -w "\n%{http_code}" \
+            "https://pierrea.se/krysslista/api.php?q=sync&key=${{ secrets.SYNC_KEY }}")
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -n -1)
+          echo "HTTP $http_code"
+          echo "$body"
+          if [ "$http_code" -ne 200 ]; then
+            echo "::error::Sync failed with HTTP $http_code"
+            exit 1
+          fi

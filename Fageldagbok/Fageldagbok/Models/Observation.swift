@@ -89,3 +89,9 @@ struct LiveResponse: Codable {
     let total: Int
     let observations: [BirdObservation]
 }
+
+struct SyncResponse: Codable {
+    let synced: Int
+    let new: Int
+    let total: Int
+}

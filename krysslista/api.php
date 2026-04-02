@@ -11,6 +11,7 @@
  *   ?q=localities           → localities with coordinates + counts
  *   ?q=stats                → per year, per month statistics
  *   ?q=live                 → today's obs from SOS API (requires OAuth)
+ *   ?q=sync                 → sync all obs from SOS API into DB (requires OAuth + key)
  *   ?q=auth-status          → token validity (requires OAuth)
  *
  * Filters (for ?q=observations):
@@ -50,8 +51,12 @@ set_error_handler(function($severity, $msg, $file, $line) {
 });
 
 try {
-    $db = new SQLite3($DB_FILE, SQLITE3_OPEN_READONLY);
+    $openMode = ($q === 'sync') ? SQLITE3_OPEN_READWRITE : SQLITE3_OPEN_READONLY;
+    $db = new SQLite3($DB_FILE, $openMode);
     $db->busyTimeout(5000);
+    if ($q === 'sync') {
+        $db->exec('PRAGMA journal_mode=WAL');
+    }
 
     switch ($q) {
         case 'summary':     handleSummary($db); break;
@@ -60,14 +65,14 @@ try {
         case 'lifelist':    handleLifelist($db); break;
         case 'localities':  handleLocalities($db); break;
         case 'stats':       handleStats($db); break;
-        case 'all':         handleAll($db); break;
         case 'areas':       handleAreas(); break;
         case 'live':        handleLive(); break;
+        case 'sync':        handleSync($db); break;
         case 'auth-status': handleAuthStatus(); break;
         default:
             jsonOut(['error' => 'Unknown endpoint', 'endpoints' => [
                 'summary', 'observations', 'species', 'lifelist',
-                'localities', 'stats', 'live', 'auth-status'
+                'localities', 'stats', 'live', 'sync', 'auth-status'
             ]]);
     }
 } catch (Exception $e) {
@@ -383,6 +388,118 @@ function mapSosRecord(array $rec): array {
         'url'                   => $rec['occurrence']['url'] ?? null,
         'dataset_name'          => $rec['datasetName'] ?? null,
     ];
+}
+
+function handleSync($db) {
+    $config = getOAuthConfig();
+    if (!$config) {
+        jsonOut(['error' => 'OAuth not configured']);
+    }
+
+    // Simple key protection
+    $syncKey = $config['sync_key'] ?? '';
+    if ($syncKey && ($_GET['key'] ?? '') !== $syncKey) {
+        http_response_code(403);
+        jsonOut(['error' => 'Invalid sync key']);
+    }
+
+    require_once $config['_helpers_path'];
+    $accessToken = getValidAccessToken($config);
+    if (!$accessToken) {
+        http_response_code(401);
+        jsonOut(['error' => 'No valid token', 'message' => 'Visit /krysslista/auth-start.php to authenticate']);
+    }
+
+    $sosApi = 'https://api.artdatabanken.se/species-observation-system/v1/Observations/Search';
+    $pageSize = 500;
+    $maxPages = 20;
+
+    $body = json_encode([
+        'output' => ['fieldSet' => 'Extended'],
+        'dataProvider' => ['ids' => [1]],
+        'reportedByMe' => true,
+    ]);
+
+    $headers = [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $accessToken,
+        'Ocp-Apim-Subscription-Key: ' . ($config['subscription_key'] ?? ''),
+    ];
+
+    // Fetch all pages from SOS API
+    $allRecords = [];
+    $totalFromApi = null;
+    $skip = 0;
+
+    for ($page = 1; $page <= $maxPages; $page++) {
+        $url = $sosApi . '?skip=' . $skip . '&take=' . $pageSize;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_TIMEOUT => 30,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($httpCode !== 200) {
+            http_response_code(502);
+            jsonOut(['error' => 'SOS API error', 'http_code' => $httpCode, 'details' => $curlError ?: json_decode($response, true)]);
+        }
+
+        $data = json_decode($response, true);
+        $records = $data['records'] ?? [];
+        $totalFromApi = $data['totalCount'] ?? $totalFromApi;
+
+        if (empty($records)) break;
+        $allRecords = array_merge($allRecords, $records);
+        if (count($allRecords) >= $totalFromApi || count($records) < $pageSize) break;
+        $skip += $pageSize;
+    }
+
+    if (empty($allRecords)) {
+        jsonOut(['synced' => 0, 'total' => $db->querySingle("SELECT COUNT(*) FROM observations")]);
+    }
+
+    // INSERT OR REPLACE — no wipe, just upsert
+    $stmt = $db->prepare("INSERT OR REPLACE INTO observations (
+        occurrence_id, taxon_id, scientific_name, vernacular_name,
+        individual_count, event_start_date, event_end_date, start_time,
+        latitude, longitude, locality, municipality, parish, county,
+        recorded_by, reported_by, remarks, activity, bird_nest_activity_id,
+        sex, life_stage, family, taxonomic_order,
+        is_redlisted, redlist_category, verification_status, url, dataset_name
+    ) VALUES (
+        :occurrence_id, :taxon_id, :scientific_name, :vernacular_name,
+        :individual_count, :event_start_date, :event_end_date, :start_time,
+        :latitude, :longitude, :locality, :municipality, :parish, :county,
+        :recorded_by, :reported_by, :remarks, :activity, :bird_nest_activity_id,
+        :sex, :life_stage, :family, :taxonomic_order,
+        :is_redlisted, :redlist_category, :verification_status, :url, :dataset_name
+    )");
+
+    $countBefore = $db->querySingle("SELECT COUNT(*) FROM observations");
+    $db->exec('BEGIN');
+    foreach ($allRecords as $rec) {
+        $row = mapSosRecord($rec);
+        $stmt->reset();
+        foreach ($row as $key => $value) {
+            $stmt->bindValue(":$key", $value);
+        }
+        $stmt->execute();
+    }
+    $db->exec('COMMIT');
+    $countAfter = $db->querySingle("SELECT COUNT(*) FROM observations");
+
+    jsonOut([
+        'synced' => count($allRecords),
+        'new' => $countAfter - $countBefore,
+        'total' => $countAfter,
+    ]);
 }
 
 function handleAuthStatus() {
