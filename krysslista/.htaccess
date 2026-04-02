@@ -4,7 +4,7 @@
 </FilesMatch>
 
 # Block config and helper PHP (not directly accessible)
-<FilesMatch "^(config|config\.example|token-helpers)\.php$">
+<FilesMatch "^(config|config\.example|token-helpers|seed-from-api|seed-data)\.php$">
     Require all denied
 </FilesMatch>
 
