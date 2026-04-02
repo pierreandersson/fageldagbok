@@ -4,10 +4,11 @@ import MapKit
 struct KartaView: View {
     @Bindable var viewModel: BirdViewModel
     @State private var selectedLocality: Locality?
+    @State private var navigationPath = NavigationPath()
     @State private var position: MapCameraPosition = .automatic
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             Map(position: $position) {
                 ForEach(viewModel.localities) { locality in
                     Annotation(locality.locality, coordinate: CLLocationCoordinate2D(
@@ -46,6 +47,30 @@ struct KartaView: View {
                     }
                 }
             }
+            .navigationDestination(for: String.self) { localityName in
+                LocalityDetailView(
+                    localityName: localityName,
+                    allObservations: viewModel.observations
+                )
+            }
+            .navigationDestination(for: LocalityObsDestination.self) { dest in
+                LocalityObservationsView(
+                    localityName: dest.localityName,
+                    allObservations: viewModel.observations
+                )
+            }
+            .navigationDestination(for: LocalitySpeciesDestination.self) { dest in
+                LocalitySpeciesView(
+                    localityName: dest.localityName,
+                    allObservations: viewModel.observations
+                )
+            }
+            .navigationDestination(for: BirdObservation.self) { observation in
+                ObservationDetailView(
+                    observation: observation,
+                    allObservations: viewModel.observations
+                )
+            }
         }
     }
 
@@ -71,6 +96,16 @@ struct KartaView: View {
                     }
                     if let lastVisit = locality.lastVisit {
                         LabeledContent("Senaste besök", value: lastVisit)
+                    }
+                }
+
+                Section {
+                    Button {
+                        let name = locality.locality
+                        selectedLocality = nil
+                        navigationPath.append(name)
+                    } label: {
+                        Label("Gå till lokal", systemImage: "arrow.right.circle")
                     }
                 }
             }

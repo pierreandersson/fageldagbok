@@ -3,20 +3,40 @@ import SwiftUI
 struct DagbokView: View {
     @Bindable var viewModel: BirdViewModel
     @State private var navigationPath = NavigationPath()
+    @State private var showDatePicker = false
+    @State private var pickerDate = Date()
+    @State private var scrollTarget: String? = nil
+
+    private let rawDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private func nearestDateId(to date: Date) -> String? {
+        let dates = viewModel.groupedByDate.map(\.date)
+        return dates.min(by: { a, b in
+            let da = rawDateFormatter.date(from: a) ?? .distantPast
+            let db = rawDateFormatter.date(from: b) ?? .distantPast
+            return abs(da.timeIntervalSince(date)) < abs(db.timeIntervalSince(date))
+        })
+    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
+            ScrollViewReader { proxy in
             List {
                 // Summary cards
                 if let summary = viewModel.summary {
                     Section {
-                        HStack(spacing: 0) {
+                        HStack(spacing: 8) {
                             StatCard(title: "Observationer", value: "\(summary.totalObs)", icon: "binoculars")
                             StatCard(title: "Arter", value: "\(summary.totalSpecies)", icon: "bird")
                             StatCard(title: "Lokaler", value: "\(summary.totalLocalities)", icon: "mappin.and.ellipse")
                         }
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
                 }
 
@@ -24,9 +44,6 @@ struct DagbokView: View {
                 if viewModel.hasActiveFilters {
                     Section {
                         HStack {
-                            if let year = viewModel.selectedYear {
-                                filterChip("\(year)") { viewModel.selectedYear = nil; viewModel.applyFilters() }
-                            }
                             if let county = viewModel.selectedCounty {
                                 filterChip(county) { viewModel.selectedCounty = nil; viewModel.applyFilters() }
                             }
@@ -50,13 +67,15 @@ struct DagbokView: View {
 
                         ForEach(sortedLocalities, id: \.self) { locality in
                             if let obs = byLocality[locality] {
-                                if sortedLocalities.count > 1 {
-                                    Text(obs.first?.shortLocality ?? locality)
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.secondary)
-                                        .listRowBackground(Color.clear)
-                                }
+                                Text(obs.first?.shortLocality ?? locality)
+                                    .font(.callout)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 10)
+                                    .listRowBackground(Color(.systemGray6))
+                                    .listRowSeparator(.hidden)
+                                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 0, trailing: 16))
                                 ForEach(obs) { observation in
                                     NavigationLink(value: observation) {
                                         ObservationRow(observation: observation)
@@ -65,13 +84,12 @@ struct DagbokView: View {
                             }
                         }
                     } header: {
-                        HStack {
-                            Text(group.displayDate)
-                            Spacer()
-                            Text("\(group.observations.count) obs")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
+                        DaySectionHeader(
+                            displayDate: group.displayDate,
+                            obsCount: group.observations.count,
+                            speciesCount: Set(group.observations.compactMap(\.taxonId)).count
+                        )
+                        .id(group.date)
                     }
                 }
 
@@ -82,6 +100,13 @@ struct DagbokView: View {
                         description: Text("Dina fågelobservationer visas här")
                     )
                 }
+            }
+            .listStyle(.plain)
+            .onChange(of: scrollTarget) { _, id in
+                guard let id else { return }
+                withAnimation { proxy.scrollTo(id, anchor: .top) }
+                scrollTarget = nil
+            }
             }
             .navigationTitle("Fågeldagbok")
             .navigationDestination(for: BirdObservation.self) { [observations = viewModel.observations] observation in
@@ -123,10 +148,18 @@ struct DagbokView: View {
             .refreshable { await viewModel.refresh() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        pickerDate = Date()
+                        showDatePicker = true
+                    } label: {
+                        Image(systemName: "calendar")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         filterMenu
                     } label: {
-                        Image(systemName: viewModel.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        Image(systemName: viewModel.hasActiveFilters ? "mappin.circle.fill" : "mappin.circle")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -135,6 +168,30 @@ struct DagbokView: View {
                             .controlSize(.small)
                     }
                 }
+            }
+            .sheet(isPresented: $showDatePicker) {
+                NavigationStack {
+                    DatePicker("", selection: $pickerDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .padding(.horizontal)
+                        .navigationTitle("Gå till datum")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Gå dit") {
+                                    let target = nearestDateId(to: pickerDate)
+                                    showDatePicker = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                        scrollTarget = target
+                                    }
+                                }
+                            }
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Avbryt") { showDatePicker = false }
+                            }
+                        }
+                }
+                .presentationDetents([.medium])
             }
             .alert("Fel", isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -149,19 +206,6 @@ struct DagbokView: View {
 
     @ViewBuilder
     private var filterMenu: some View {
-        Menu("År") {
-            Button("Alla år") {
-                viewModel.selectedYear = nil
-                viewModel.applyFilters()
-            }
-            ForEach(viewModel.availableYears, id: \.self) { year in
-                Button(String(year)) {
-                    viewModel.selectedYear = year
-                    viewModel.applyFilters()
-                }
-            }
-        }
-
         if !viewModel.availableCounties.isEmpty {
             Menu("Län") {
                 Button("Alla län") {
@@ -208,6 +252,36 @@ struct DagbokView: View {
         .background(Color("AccentGreen").opacity(0.15))
         .foregroundStyle(Color("AccentGreen"))
         .clipShape(Capsule())
+    }
+}
+
+// MARK: - Day section header
+
+struct DaySectionHeader: View {
+    let displayDate: String
+    let obsCount: Int
+    let speciesCount: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "calendar")
+                .foregroundStyle(.red.opacity(0.6))
+            Text(displayDate)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+            Spacer()
+            Text("\(obsCount) obs · \(speciesCount) arter")
+                .font(.subheadline)
+                .foregroundStyle(.primary.opacity(0.6))
+        }
+        .font(.callout)
+        .padding(.vertical, 15)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background(Color.red.opacity(0.12))
+        .padding(.bottom, 2)
+        .listRowInsets(EdgeInsets())
+        .textCase(nil)
     }
 }
 
