@@ -73,14 +73,15 @@ krysslista/                   # PHP-backend
 
 ### Backend
 
-1. Kopiera `config.example.php` till `config.php` och fyll i OAuth-uppgifter + SOS API-nyckel
+1. Skapa `config.php` med OAuth-uppgifter, SOS API-nyckel och sync-nyckel
 2. Kor `auth-start.php` i webblasaren for att autentisera mot Artportalen
 3. Kor `seed-from-api.php` for initial databasimport
 
 ### iOS
 
-1. Oppna `Fageldagbok.xcodeproj` i Xcode
-2. Bygg och kor pa simulator eller enhet
+1. Kopiera `Secrets.example.swift` till `Secrets.swift` och fyll i sync-nyckeln
+2. Oppna `Fageldagbok.xcodeproj` i Xcode
+3. Bygg och kor pa simulator eller enhet
 
 ### GitHub Secrets
 
